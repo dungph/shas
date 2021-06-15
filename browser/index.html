@@ -1,0 +1,46 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Shas Home Automation system</title>
+		
+		<link rel="manifest" href="/assert/manifest.json"/>
+  		<meta name="theme-color" content="#3298dc"/>
+		<!-- Compiled and minified CSS -->
+		<link rel="stylesheet" href="/assert/bulma.min.css">
+		<link rel="stylesheet" href="/assert/bulma-switch.min.css">
+		<link rel="stylesheet" href="/assert/bulma-slider.min.css">
+		<link rel='icon' href='/assert/icon.png' type='image/x-icon'/ >
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    </head>
+    <body>
+        <section id="app">This page is loading . . .</section>
+        <script type=module>
+            import init from '/assert/pkg/browser.js';
+            init().catch(console.error);
+        </script>
+		
+
+		<style>
+			.card {
+				height: 100%;
+			}
+			.load {
+			    &.is-loading {
+			        position: relative;
+			        pointer-events: none;
+			        opacity: 0.5;
+			        &:after {
+			            @include loader;
+			            position: absolute;
+			            top: calc(50% - 2.5em);
+			            left: calc(50% - 2.5em);
+			            width: 5em;
+			            height: 5em;
+			            border-width: 0.25em;
+			        }
+			    }
+			}
+		</style>
+    </body>
+</html>

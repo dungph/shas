@@ -1,0 +1,18 @@
+{
+  "background_color": "#3298dc",
+  "description": "shas app",
+  "display": "fullscreen",
+  "icons": [
+    {
+      "src": "/assert/icon.png",
+      "sizes": "980x980",
+      "type": "image/png"
+    }
+  ],
+  "name": "Shas Home Automation System",
+  "short_name": "Shas",
+  "start_url": "/assert/index.html",
+  "theme_color": "#3298dc"
+
+
+}
