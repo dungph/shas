@@ -1,0 +1,46 @@
+name: Browser Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check_fmt_browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./browser
+
+    steps:
+    - uses: actions/checkout@master
+    - name: fmt
+      run: cargo fmt --all -- --check
+
+  build_test_browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./browser
+
+    steps:
+    - uses: actions/checkout@master
+    - name: Cache
+      uses: actions/cache@v2.1.4
+      with:
+        path: |
+            ~/.cargo/registry
+            Cargo.lock
+            target
+        key: ${{ runner.os }}-cargo-browser-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - name: Build
+      run: wasm-pack build --target web
+
+
