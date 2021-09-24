@@ -1,61 +1,44 @@
 use super::DB;
-use argon2::{hash_encoded, Config};
-use sqlx::postgres::PgQueryResult;
-use sqlx::{query, query_as, Result};
-use utils::Entity;
+use serde_json::{Map, Value};
+use sqlx::{query, Result};
+use std::collections::BTreeMap;
 
-pub async fn create_entity(entity: &Entity) -> Result<PgQueryResult> {
-    let conf = Config::default();
-    let salt = rand::random::<[u8; 32]>();
-    let pwd = hash_encoded(entity.password.as_bytes(), &salt, &conf).unwrap();
-
-    query!(
-        r#"
-        -- CREATE ENTITY
-        insert into entity (name, password, passphrase, admin)
-        values ($1, $2, $3, $4);
-        "#,
-        entity.name,
-        pwd,
-        entity.passphrase,
-        entity.admin,
-    )
-    .execute(&*DB)
-    .await
+pub async fn _upsert_data(entity: &[u8], data: BTreeMap<String, Value>) -> Result<()> {
+    if data.is_empty() {
+        Ok(())
+    } else {
+        query!(
+            r#"
+            -- UPSERT VALUE
+            insert into entity(public_key, entity_data)
+            values($1, $2)
+            on conflict(public_key, entity_data) do update
+            set entity_data = entity.entity_data || $2
+            "#,
+            entity,
+            Value::Object(data.into_iter().collect::<Map<String, Value>>())
+        )
+        .execute(&*DB)
+        .await?;
+        Ok(())
+    }
 }
 
-pub async fn create_entity_by(entity: &Entity, by: &str) -> Result<PgQueryResult> {
-    create_entity(entity).await?;
-    query!(
+pub async fn _get_data(entity: &[u8]) -> Result<BTreeMap<String, Value>> {
+    Ok(query!(
         r#"
-        -- SUBSCRIPTION FOR NEW ENTITY
-        insert into entity_subscription(
-            subject,
-            object,
-            manage,
-            read,
-            request
-            )
-        values ($1, $2, $3, $3, $3)
+        -- GET ENTITY'S DATA 
+        select entity_data from entity 
+        where public_key = $1
         "#,
-        by,
-        entity.name,
-        true
-    )
-    .execute(&*DB)
-    .await
-}
-
-pub async fn get_entity(entity: &str) -> Result<Option<Entity>> {
-    query_as!(
-        Entity,
-        r"
-        -- GET ENTITY 
-        select * from entity 
-        where name=$1
-        ",
         entity
     )
-    .fetch_optional(&*DB)
-    .await
+    .fetch_one(&*DB)
+    .await?
+    .entity_data
+    .as_object()
+    .unwrap_or(&Map::new())
+    .clone()
+    .into_iter()
+    .collect())
 }

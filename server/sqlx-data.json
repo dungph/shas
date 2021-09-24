@@ -1,3 +1,76 @@
 {
-  "db": "PostgreSQL"
+  "db": "PostgreSQL",
+  "086b38baf729231756cacd752462e1edce080e3df40866d8f2d82266a3b8645d": {
+    "query": "\n        -- GET ENTITY'S DATA \n        select entity_data from entity \n        where public_key = $1\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "entity_data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "470fdc494c1e5c49b3538cdb2457e6982cd8f20f7c18bb2ceb9cc55361ac3ef1": {
+    "query": "\n        -- CREATE ENTITY\n        insert into user_account (username, password, admin)\n        values ($1, $2, $3);\n        ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Bool"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "63ca4e8c83a466081e23dedf11a44dff06f32822faa05965090617ca5f3d184e": {
+    "query": "\n        -- GET ENTITY \n        select password, admin from user_account  \n        where username=$1\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "password",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 1,
+          "name": "admin",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
+  "9621947d86f15926728df2e8e8917297c930bd4f5de8d2aec1d9e8dcaa1743c0": {
+    "query": "\n            -- UPSERT VALUE\n            insert into entity(public_key, entity_data)\n            values($1, $2)\n            on conflict(public_key, entity_data) do update\n            set entity_data = entity.entity_data || $2\n            ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Bytea",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  }
 }

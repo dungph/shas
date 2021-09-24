@@ -1,9 +1,6 @@
-//mod entity;
-//mod field;
-//mod subscription;
-//pub use entity::*;
-//pub use field::*;
-//pub use subscription::*;
+mod account;
+mod entity;
+
 use once_cell::sync::Lazy;
 
 static DB: Lazy<sqlx::PgPool> = Lazy::new(|| {
