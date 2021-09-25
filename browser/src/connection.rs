@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
-use minicbor::Encoder;
+use minicbor::{Decoder, Encoder};
 use seed::{prelude::*, *};
 use serde_json::Value;
 use snow::{HandshakeState, TransportState};
-use utils::encode_cbor;
+use utils::{decode_cbor, encode_cbor};
 
 const NOISE_XX: &str = "Noise_XX_25519_ChaChaPoly_BLAKE2s";
 
@@ -85,7 +85,8 @@ impl Model {
                     let mut payload = vec![0u8; 65535];
                     if let Some(ref mut state) = self.transport {
                         let len = state.read_message(&message, &mut payload).unwrap();
-                        let payload = serde_cbor::from_slice(&payload[..len]).unwrap();
+                        let mut decoder = Decoder::new(&message[..len]);
+                        let payload = decode_cbor(&mut decoder).unwrap();
                         log!(payload);
                         self.payload.push_back(payload)
                     }

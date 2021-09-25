@@ -1821,16 +1821,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_cbor"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
-dependencies = [
- "half",
- "serde",
-]
-
-[[package]]
 name = "serde_derive"
 version = "1.0.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1924,7 +1914,6 @@ dependencies = [
  "rand 0.7.3",
  "rust-argon2",
  "serde",
- "serde_cbor",
  "serde_derive",
  "serde_json",
  "sha2",
