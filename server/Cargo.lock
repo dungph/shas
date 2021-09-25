@@ -1340,6 +1340,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 
 [[package]]
+name = "minicbor"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9761df552087b47d7651dd4d14717c35ef43d47c01e04e399530faaa427ca541"
+dependencies = [
+ "half",
+]
+
+[[package]]
 name = "nom"
 version = "6.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1918,6 +1927,7 @@ dependencies = [
  "base64 0.13.0",
  "chrono",
  "futures",
+ "minicbor",
  "once_cell",
  "payload",
  "rand 0.7.3",

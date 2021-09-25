@@ -1,0 +1,21 @@
+{
+  "query": "\n        -- GET ENTITY'S DATA \n        select entity_data from entity \n        where public_key = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_data",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "086b38baf729231756cacd752462e1edce080e3df40866d8f2d82266a3b8645d"
+}

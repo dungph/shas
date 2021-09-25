@@ -1,6 +1,7 @@
 mod connection_handle;
 mod database;
 mod peer_handle;
+mod utils;
 mod vars;
 
 use tide_websockets::WebSocket;

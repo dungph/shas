@@ -1,9 +1,10 @@
 use super::DB;
+use crate::utils;
 use serde_json::{Map, Value};
 use sqlx::{query, Result};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
-pub async fn _upsert_data(entity: &[u8], data: BTreeMap<String, Value>) -> Result<()> {
+pub async fn _upsert_data(entity: &[u8], data: HashMap<String, utils::Value>) -> Result<()> {
     if data.is_empty() {
         Ok(())
     } else {
@@ -16,7 +17,7 @@ pub async fn _upsert_data(entity: &[u8], data: BTreeMap<String, Value>) -> Resul
             set entity_data = entity.entity_data || $2
             "#,
             entity,
-            Value::Object(data.into_iter().collect::<Map<String, Value>>())
+            Value::Object(data.into_iter().map(|(k, v)| (k, v.into())).collect())
         )
         .execute(&*DB)
         .await?;
@@ -24,7 +25,7 @@ pub async fn _upsert_data(entity: &[u8], data: BTreeMap<String, Value>) -> Resul
     }
 }
 
-pub async fn _get_data(entity: &[u8]) -> Result<BTreeMap<String, Value>> {
+pub async fn _get_data(entity: &[u8]) -> Result<HashMap<String, utils::Value>> {
     Ok(query!(
         r#"
         -- GET ENTITY'S DATA 
@@ -40,5 +41,6 @@ pub async fn _get_data(entity: &[u8]) -> Result<BTreeMap<String, Value>> {
     .unwrap_or(&Map::new())
     .clone()
     .into_iter()
+    .map(|(k, v)| (k, v.into()))
     .collect())
 }
