@@ -1,10 +1,8 @@
 use super::DB;
-use crate::utils;
 use serde_json::{Map, Value};
 use sqlx::{query, Result};
-use std::collections::HashMap;
 
-pub async fn _upsert_data(entity: &[u8], data: HashMap<String, utils::Value>) -> Result<()> {
+pub async fn _upsert_data(entity: &[u8], data: Map<String, Value>) -> Result<()> {
     if data.is_empty() {
         Ok(())
     } else {
@@ -17,7 +15,7 @@ pub async fn _upsert_data(entity: &[u8], data: HashMap<String, utils::Value>) ->
             set entity_data = entity.entity_data || $2
             "#,
             entity,
-            Value::Object(data.into_iter().map(|(k, v)| (k, v.into())).collect())
+            Value::Object(data)
         )
         .execute(&*DB)
         .await?;
@@ -25,7 +23,7 @@ pub async fn _upsert_data(entity: &[u8], data: HashMap<String, utils::Value>) ->
     }
 }
 
-pub async fn _get_data(entity: &[u8]) -> Result<HashMap<String, utils::Value>> {
+pub async fn _get_data(entity: &[u8]) -> Result<Map<String, Value>> {
     Ok(query!(
         r#"
         -- GET ENTITY'S DATA 
@@ -41,6 +39,5 @@ pub async fn _get_data(entity: &[u8]) -> Result<HashMap<String, utils::Value>> {
     .unwrap_or(&Map::new())
     .clone()
     .into_iter()
-    .map(|(k, v)| (k, v.into()))
     .collect())
 }
