@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use minicbor::{Decoder, Encoder};
+use minicbor::{decode::Tokenizer, Encoder};
 use seed::{prelude::*, *};
 use serde_json::Value;
 use snow::{HandshakeState, TransportState};
@@ -85,7 +85,7 @@ impl Model {
                     let mut payload = vec![0u8; 65535];
                     if let Some(ref mut state) = self.transport {
                         let len = state.read_message(&message, &mut payload).unwrap();
-                        let mut decoder = Decoder::new(&message[..len]);
+                        let mut decoder = Tokenizer::new(&message[..len]);
                         let payload = decode_cbor(&mut decoder).unwrap();
                         log!(payload);
                         self.payload.push_back(payload)

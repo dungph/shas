@@ -4,7 +4,7 @@ use utils::{decode_cbor, encode_cbor};
 //use anyhow::anyhow;
 use async_std::{channel::unbounded, prelude::StreamExt};
 use futures::future::{select, Either};
-use minicbor::{Decoder, Encoder};
+use minicbor::{decode::Tokenizer, Decoder, Encoder};
 use serde_json::Value;
 use tide::{Request, Result};
 //use tide_websockets::Message::Close;
@@ -64,7 +64,7 @@ pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
 
                     noise.read_message(&bytes, &mut payload)?;
 
-                    let mut decoder = Decoder::new(&mut payload);
+                    let mut decoder = Tokenizer::new(&mut payload);
                     let payload: Value = decode_cbor(&mut decoder)
                         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?;
 

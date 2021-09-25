@@ -6,6 +6,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-minicbor = { version = "0.11.3", features = ["half", "alloc"] }
+minicbor = { version = "0.11.3", features = ["half"] }
 base64 = "0.13.0"
 serde_json = "1.0.68"

@@ -1,93 +1,108 @@
 use minicbor::{
-    data::Type,
-    decode::{self, Decoder},
+    decode::{self, Tokenizer},
     encode::{self, Encode, Encoder},
 };
 use serde_json::{Map, Value};
 
-pub fn decode_cbor<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
-    Ok(match d.datatype()? {
-        minicbor::data::Type::Bool => Value::from(d.bool()?),
-        minicbor::data::Type::Null => Value::Null,
-        minicbor::data::Type::Undefined => Value::Null,
-        minicbor::data::Type::U8 => Value::from(d.u8()?),
-        minicbor::data::Type::U16 => Value::from(d.u16()?),
-        minicbor::data::Type::U32 => Value::from(d.u32()?),
-        minicbor::data::Type::U64 => Value::from(d.u64()?),
-        minicbor::data::Type::I8 => Value::from(d.i8()?),
-        minicbor::data::Type::I16 => Value::from(d.i16()?),
-        minicbor::data::Type::I32 => Value::from(d.i32()?),
-        minicbor::data::Type::I64 => Value::from(d.i64()?),
-        minicbor::data::Type::F16 => Value::from(d.f16()?),
-        minicbor::data::Type::F32 => Value::from(d.f16()?),
-        minicbor::data::Type::F64 => Value::from(d.f64()?),
-        minicbor::data::Type::Simple => Err(decode::Error::Message("Simple not supported"))?,
-        minicbor::data::Type::Bytes => {
+pub fn decode_cbor<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::Error> {
+    Ok(match tokenizer.token()? {
+        decode::Token::Bool(b) => Value::from(b),
+        decode::Token::U8(n) => Value::from(n),
+        decode::Token::U16(n) => Value::from(n),
+        decode::Token::U32(n) => Value::from(n),
+        decode::Token::U64(n) => Value::from(n),
+        decode::Token::I8(n) => Value::from(n),
+        decode::Token::I16(n) => Value::from(n),
+        decode::Token::I32(n) => Value::from(n),
+        decode::Token::I64(n) => Value::from(n),
+        decode::Token::F16(n) => Value::from(n),
+        decode::Token::F32(n) => Value::from(n),
+        decode::Token::F64(n) => Value::from(n),
+        decode::Token::Bytes(b) => {
             let mut buf = String::from("#");
-            let bytes = d.bytes()?;
-            base64::encode_config_buf(bytes, base64::STANDARD, &mut buf);
+            base64::encode_config_buf(b, base64::STANDARD, &mut buf);
             Value::String(buf)
         }
-        minicbor::data::Type::BytesIndef => {
-            let mut buf = String::from("#");
+        decode::Token::String(s) => Value::from(s),
+        decode::Token::Array(n) => {
+            let mut result = Vec::new();
+            for _ in 0..n {
+                result.push(decode_cbor(tokenizer)?);
+            }
+            Value::from(result)
+        }
+        decode::Token::Map(m) => {
+            let mut result = Map::new();
+            for _ in 0..m {
+                if let Some(s) = decode_cbor(tokenizer)?.as_str() {
+                    result.insert(s.to_owned(), decode_cbor(tokenizer)?);
+                }
+            }
+            Value::from(result)
+        }
+        decode::Token::Tag(_t) => Err(decode::Error::Message("Tag not yet supported"))?,
+        decode::Token::Simple(_s) => Err(decode::Error::Message("Simple not yet supported"))?,
+        decode::Token::Break => Err(decode::Error::Message("unexpected break"))?,
+        decode::Token::Null => Value::Null,
+        decode::Token::Undefined => Value::Null,
+        decode::Token::BeginBytes => {
             let mut bytes = Vec::new();
-            d.bytes_iter()?
-                .collect::<Result<Vec<&[u8]>, decode::Error>>()?
-                .iter()
-                .for_each(|bs| bytes.extend_from_slice(bs));
+            loop {
+                let token = tokenizer.token()?;
+                if token == decode::Token::Break {
+                    break;
+                }
+                if let decode::Token::Bytes(b) = token {
+                    bytes.extend_from_slice(b);
+                }
+            }
+            let mut buf = String::from("#");
             base64::encode_config_buf(bytes, base64::STANDARD, &mut buf);
             Value::String(buf)
         }
-        minicbor::data::Type::String => Value::String(d.str()?.into()),
-        minicbor::data::Type::StringIndef => {
+        decode::Token::BeginString => {
             let mut buf = String::new();
-            d.str_iter()?
-                .collect::<Result<Vec<&str>, decode::Error>>()?
-                .iter()
-                .for_each(|s| buf.push_str(s));
+            loop {
+                let token = tokenizer.token()?;
+                if token == decode::Token::Break {
+                    break;
+                }
+                if let decode::Token::String(s) = token {
+                    buf.push_str(s);
+                }
+            }
             Value::String(buf)
         }
-        minicbor::data::Type::Array => Value::from({
-            let len = d.array()?.unwrap();
-            let mut result = Vec::new();
-            for _ in 0..len {
-                result.push(decode_cbor(d)?);
-            }
-            result
-        }),
-        minicbor::data::Type::ArrayIndef => Value::from({
-            let _ = d.array()?;
-            let mut result = Vec::new();
-            while d.datatype()? != Type::Break {
-                result.push(decode_cbor(d)?);
-            }
-            d.skip()?;
-            result
-        }),
-        minicbor::data::Type::Map => Value::Object({
-            let mut result = Map::new();
-            let len = d.map()?.unwrap();
-            for _ in 0..len {
-                if let Some(s) = decode_cbor(d)?.as_str() {
-                    result.insert(s.to_owned(), decode_cbor(d)?);
+        decode::Token::BeginArray => {
+            let mut buf = Vec::new();
+            loop {
+                let mut look_ahead = tokenizer.clone();
+                let token = look_ahead.token()?;
+                if token == decode::Token::Break {
+                    tokenizer.token()?;
+                    break;
+                } else {
+                    buf.push(decode_cbor(tokenizer)?)
                 }
             }
-            result
-        }),
-        minicbor::data::Type::MapIndef => Value::Object({
-            let mut result = Map::new();
-            let _ = d.map()?;
-            while d.datatype()? != Type::Break {
-                if let Some(s) = decode_cbor(d)?.as_str() {
-                    result.insert(s.to_owned(), decode_cbor(d)?);
+            Value::Array(buf)
+        }
+        decode::Token::BeginMap => {
+            let mut buf = Map::new();
+            loop {
+                let mut look_ahead = tokenizer.clone();
+                let token = look_ahead.token()?;
+                if token == decode::Token::Break {
+                    tokenizer.token()?;
+                    break;
+                } else {
+                    if let Some(s) = decode_cbor(tokenizer)?.as_str() {
+                        buf.insert(s.to_owned(), decode_cbor(tokenizer)?);
+                    }
                 }
             }
-            Decoder::skip(d)?;
-            result
-        }),
-        minicbor::data::Type::Tag => Err(decode::Error::Message("Tag not supported"))?,
-        minicbor::data::Type::Break => Err(decode::Error::Message("Second break"))?,
-        minicbor::data::Type::Unknown(n) => Err(decode::Error::UnknownVariant(n.into()))?,
+            Value::Object(buf)
+        }
     })
 }
 
@@ -149,7 +164,8 @@ fn test_json_cbor() {
                "k2": "v2"
            },
            "k3": ["a", "b", "c"],
-       }
+       },
+       "k": "#123aA"
     });
 
     let mut buf = [0u8; 100];
@@ -159,8 +175,55 @@ fn test_json_cbor() {
     let written = encoder.into_inner().as_ref() as *const [u8] as *const () as usize
         - &buf as *const [u8] as *const () as usize;
 
-    let mut decoder = Decoder::new(&buf[..written]);
+    let mut decoder = Tokenizer::new(&buf[..written]);
 
     let svalue: Value = decode_cbor(&mut decoder).unwrap();
     assert_eq!(value, svalue);
+}
+
+#[test]
+fn test_decode_cbor() {
+    let mut buf = [0u8; 1000];
+    let begin = &buf as *const _ as *const () as usize;
+    let mut encoder = Encoder::new(&mut buf[..]);
+
+    encoder
+        .begin_map()
+        .unwrap()
+        .str("hello")
+        .unwrap()
+        .begin_str()
+        .unwrap()
+        .str("ww")
+        .unwrap()
+        .str("w")
+        .unwrap()
+        .str("333")
+        .unwrap()
+        .end()
+        .unwrap()
+        .str("aa")
+        .unwrap()
+        .begin_array()
+        .unwrap()
+        .str("aa")
+        .unwrap()
+        .str("cc")
+        .unwrap()
+        .str("bb")
+        .unwrap()
+        .end()
+        .unwrap()
+        .end()
+        .unwrap();
+    let end = encoder.into_inner() as *const _ as *const () as usize;
+
+    let len = end - begin;
+    let mut decoder = Tokenizer::new(&buf[..len]);
+    let result = decode_cbor(&mut decoder).unwrap();
+    let expected = serde_json::json!({
+        "hello": "www333",
+        "aa": ["aa", "cc", "bb"]
+    });
+    assert_eq!(result, expected);
 }
