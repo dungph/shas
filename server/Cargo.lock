@@ -1434,14 +1434,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "payload"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_cbor",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1851,9 +1843,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.64"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "799e97dc9fdae36a5c8b8f2cae9ce2ee9fdce2058c57a93e6099d919fd982f79"
+checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
 dependencies = [
  "indexmap",
  "itoa",
@@ -1929,7 +1921,6 @@ dependencies = [
  "futures",
  "minicbor",
  "once_cell",
- "payload",
  "rand 0.7.3",
  "rust-argon2",
  "serde",
@@ -1941,6 +1932,7 @@ dependencies = [
  "sqlx",
  "tide",
  "tide-websockets",
+ "utils",
  "x25519-dalek",
 ]
 
@@ -2470,6 +2462,15 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
+
+[[package]]
+name = "utils"
+version = "0.1.0"
+dependencies = [
+ "base64 0.13.0",
+ "minicbor",
+ "serde_json",
+]
 
 [[package]]
 name = "value-bag"

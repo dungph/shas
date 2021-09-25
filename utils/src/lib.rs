@@ -5,7 +5,7 @@ use minicbor::{
 };
 use serde_json::{Map, Value};
 
-fn decode<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
+pub fn decode_cbor<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
     Ok(match d.datatype()? {
         minicbor::data::Type::Bool => Value::from(d.bool()?),
         minicbor::data::Type::Null => Value::Null,
@@ -51,7 +51,7 @@ fn decode<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
             let len = d.array()?.unwrap();
             let mut result = Vec::new();
             for _ in 0..len {
-                result.push(decode(d)?);
+                result.push(decode_cbor(d)?);
             }
             result
         }),
@@ -59,7 +59,7 @@ fn decode<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
             let _ = d.array()?;
             let mut result = Vec::new();
             while d.datatype()? != Type::Break {
-                result.push(decode(d)?);
+                result.push(decode_cbor(d)?);
             }
             d.skip()?;
             result
@@ -68,8 +68,8 @@ fn decode<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
             let mut result = Map::new();
             let len = d.map()?.unwrap();
             for _ in 0..len {
-                if let Some(s) = decode(d)?.as_str() {
-                    result.insert(s.to_owned(), decode(d)?);
+                if let Some(s) = decode_cbor(d)?.as_str() {
+                    result.insert(s.to_owned(), decode_cbor(d)?);
                 }
             }
             result
@@ -78,8 +78,8 @@ fn decode<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
             let mut result = Map::new();
             let _ = d.map()?;
             while d.datatype()? != Type::Break {
-                if let Some(s) = decode(d)?.as_str() {
-                    result.insert(s.to_owned(), decode(d)?);
+                if let Some(s) = decode_cbor(d)?.as_str() {
+                    result.insert(s.to_owned(), decode_cbor(d)?);
                 }
             }
             Decoder::skip(d)?;
@@ -91,7 +91,7 @@ fn decode<'b>(d: &mut Decoder<'b>) -> Result<Value, decode::Error> {
     })
 }
 
-fn encode<W: encode::Write>(
+pub fn encode_cbor<W: encode::Write>(
     value: &Value,
     e: &mut Encoder<W>,
 ) -> Result<(), encode::Error<W::Error>> {
@@ -124,14 +124,14 @@ fn encode<W: encode::Write>(
         Value::Array(a) => {
             e.array(a.len() as u64)?;
             for element in a {
-                encode(element, e)?;
+                encode_cbor(element, e)?;
             }
         }
         Value::Object(o) => {
             e.map(o.len() as u64)?;
             for (k, v) in o {
                 k.encode(e)?;
-                encode(v, e)?;
+                encode_cbor(v, e)?;
             }
         }
     };
@@ -155,12 +155,12 @@ fn test_json_cbor() {
     let mut buf = [0u8; 100];
 
     let mut encoder = Encoder::new(&mut buf[..]);
-    encode(&value, &mut encoder).unwrap();
+    encode_cbor(&value, &mut encoder).unwrap();
     let written = encoder.into_inner().as_ref() as *const [u8] as *const () as usize
         - &buf as *const [u8] as *const () as usize;
 
     let mut decoder = Decoder::new(&buf[..written]);
 
-    let svalue: Value = decode(&mut decoder).unwrap();
+    let svalue: Value = decode_cbor(&mut decoder).unwrap();
     assert_eq!(value, svalue);
 }

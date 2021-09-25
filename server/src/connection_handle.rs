@@ -1,20 +1,15 @@
-use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
-
+use std::io;
+use utils::{decode_cbor, encode_cbor};
 //use crate::entity::MsgSender;
 //use anyhow::anyhow;
-use async_std::{
-    channel::{unbounded, Sender},
-    prelude::StreamExt,
-    sync::Mutex,
-};
+use async_std::{channel::unbounded, prelude::StreamExt};
 use futures::future::{select, Either};
-use once_cell::sync::Lazy;
-use payload::Payload;
+use minicbor::{Decoder, Encoder};
+use serde_json::Value;
 use tide::{Request, Result};
 //use tide_websockets::Message::Close;
 use sha2::{self, Digest};
 use tide_websockets::{Message, WebSocketConnection as Connection};
-use x25519_dalek::{EphemeralSecret, PublicKey, StaticSecret};
 
 use crate::peer_handle::{handle_payload, insert_sender};
 
@@ -54,8 +49,6 @@ pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
 
     let (sender, receiver) = unbounded();
 
-    // for testing
-    sender.send(Payload::ConnectionAccepted).await?;
     insert_sender(&remote_key, sender).await;
 
     let send_stream = stream.clone();
@@ -71,7 +64,9 @@ pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
 
                     noise.read_message(&bytes, &mut payload)?;
 
-                    let payload: Payload = serde_cbor::from_slice(&payload)?;
+                    let mut decoder = Decoder::new(&mut payload);
+                    let payload: Value = decode_cbor(&mut decoder)
+                        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?;
 
                     let peer = noise.get_remote_static().unwrap();
 
@@ -84,11 +79,15 @@ pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
                 out_fut = old_out_fut;
             }
             Either::Right((payload, old_in_fut)) => {
-                let payload = serde_cbor::to_vec(&payload?).unwrap();
-                let mut message = Vec::new();
-                message.resize(payload.len() + 16, 0u8);
+                let mut buf = [0u8; 1024];
+                let mut encoder = Encoder::new(&mut buf[..]);
+                encode_cbor(&payload?, &mut encoder).unwrap();
+                let written = encoder.into_inner() as *const [u8] as *const () as usize
+                    - &buf as *const [u8] as *const () as usize;
 
-                noise.write_message(&payload, &mut message)?;
+                let mut message = Vec::new();
+                message.resize(written + 16, 0u8);
+                noise.write_message(&buf[..written], &mut message)?;
 
                 send_stream.send_bytes(message).await?;
 

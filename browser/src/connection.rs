@@ -1,8 +1,10 @@
 use std::collections::VecDeque;
 
-use payload::Payload;
+use minicbor::Encoder;
 use seed::{prelude::*, *};
+use serde_json::Value;
 use snow::{HandshakeState, TransportState};
+use utils::encode_cbor;
 
 const NOISE_XX: &str = "Noise_XX_25519_ChaChaPoly_BLAKE2s";
 
@@ -12,7 +14,7 @@ pub struct Model {
     handshake: Option<HandshakeState>,
     transport: Option<TransportState>,
     ws: WebSocket,
-    payload: VecDeque<Payload>,
+    payload: VecDeque<Value>,
 }
 
 #[derive(Clone)]
@@ -35,31 +37,36 @@ impl Model {
             payload: VecDeque::new(),
         }
     }
-    pub fn send(&mut self, payload: Payload) {
+    pub fn send(&mut self, payload: Value) {
         if let Some(ref mut state) = self.transport {
-            let payload = serde_cbor::to_vec(&payload).unwrap();
+            let mut buf = [0u8; 1024];
+            let mut encoder = Encoder::new(&mut buf[..]);
+            encode_cbor(&payload, &mut encoder).unwrap();
+            let written =
+                encoder.into_inner() as *const _ as *const () as usize - &buf as *const _ as usize;
+
             let mut message = vec![0u8; 65535];
-            let len = state.write_message(&payload, &mut message).unwrap();
+            let len = state.write_message(&buf[..written], &mut message).unwrap();
             self.ws.send_bytes(&message[..len]).unwrap();
         };
     }
-    pub fn recv(&mut self) -> Option<Payload> {
+    pub fn recv(&mut self) -> Option<Value> {
         self.payload.pop_front()
     }
     pub fn update(&mut self, msg: Msg, _orders: &mut impl Orders<Msg>) {
         match msg {
             Msg::Passwd(s) => self.remote_passwd = s,
             Msg::Login => {
-                let payload = Payload::Login {
-                    admin_pwd: self.remote_passwd.clone(),
-                };
+                //let payload = Payload::Login {
+                //    admin_pwd: self.remote_passwd.clone(),
+                //};
 
-                let payload = serde_cbor::to_vec(&payload).unwrap();
-                if let Some(ref mut state) = self.transport {
-                    let mut message = vec![0u8; 65535];
-                    let len = state.write_message(&payload, &mut message).unwrap();
-                    self.ws.send_bytes(&message[..len]).unwrap();
-                }
+                //let payload = serde_cbor::to_vec(&payload).unwrap();
+                //if let Some(ref mut state) = self.transport {
+                //    let mut message = vec![0u8; 65535];
+                //    let len = state.write_message(&payload, &mut message).unwrap();
+                //    self.ws.send_bytes(&message[..len]).unwrap();
+                //}
             }
             Msg::Recv(message) => {
                 log!("recv", message);

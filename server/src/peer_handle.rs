@@ -2,26 +2,15 @@ use std::{collections::HashMap, io};
 
 use async_std::{channel::Sender, sync::Mutex};
 use once_cell::sync::Lazy;
-use payload::Payload;
+use serde_json::Value;
 
-static POOL: Lazy<Mutex<HashMap<Vec<u8>, Sender<Payload>>>> =
+static POOL: Lazy<Mutex<HashMap<Vec<u8>, Sender<Value>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub async fn insert_sender(key: &[u8], sender: Sender<Payload>) {
+pub async fn insert_sender(key: &[u8], sender: Sender<Value>) {
     POOL.lock().await.insert(key.to_vec(), sender);
 }
 
-pub async fn handle_payload(peer: &[u8], payload: Payload) -> io::Result<()> {
-    match payload {
-        Payload::ConnectionAccepted => todo!(),
-        Payload::ConnectionDenied => todo!(),
-        Payload::AskAdminAccept { peer } => todo!(),
-        Payload::AdminAccept { peer } => todo!(),
-        Payload::Login { admin_pwd } => todo!(),
-        Payload::AskData => todo!(),
-        Payload::SyncData(_) => todo!(),
-        Payload::SyncRequest(_) => todo!(),
-        Payload::Relay(_) => todo!(),
-    };
+pub async fn handle_payload(_peer: &[u8], _payload: Value) -> io::Result<()> {
     Ok(())
 }
