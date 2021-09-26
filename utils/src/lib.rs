@@ -1,5 +1,5 @@
 use minicbor::{
-    decode::{self, Tokenizer},
+    decode::{self, Token, Tokenizer},
     encode::{self, write::EndOfSlice, Encode, Encoder},
 };
 use serde_json::{Map, Value};
@@ -165,7 +165,7 @@ fn encode_cbor_inner<W: encode::Write>(
 }
 
 #[test]
-fn test_json_cbor() {
+fn test_json_cbor() -> Result<(), decode::Error> {
     let value = serde_json::json!({
        "name": "Pha",
        "map": {
@@ -176,55 +176,44 @@ fn test_json_cbor() {
            },
            "k3": ["a", "b", "c"],
        },
-       "k": "#123aA"
+       "b": "#RHVubg=="
     });
 
     let mut buf = [0u8; 100];
-
-    let mut encoder = Encoder::new(&mut buf[..]);
-    encode_cbor_inner(&value, &mut encoder).unwrap();
-    let written = encoder.into_inner().as_ref() as *const [u8] as *const () as usize
-        - &buf as *const [u8] as *const () as usize;
+    let written = encode_cbor(&value, &mut buf).unwrap();
 
     let svalue: Value = decode_cbor(&buf[..written]).unwrap();
     assert_eq!(value, svalue);
+
+    let mut t = Tokenizer::new(&buf[..written]);
+    assert_eq!(t.token()?, Token::Map(3));
+    assert_eq!(t.token()?, Token::String("b"));
+    assert_eq!(t.token()?, Token::Bytes(b"Dunn"));
+    Ok(())
 }
 
 #[test]
-fn test_decode_cbor() {
+fn test_indef_type() -> Result<(), encode::Error<EndOfSlice>> {
     let mut buf = [0u8; 1000];
     let begin = &buf as *const _ as *const () as usize;
     let mut encoder = Encoder::new(&mut buf[..]);
 
     encoder
-        .begin_map()
-        .unwrap()
-        .str("hello")
-        .unwrap()
-        .begin_str()
-        .unwrap()
-        .str("ww")
-        .unwrap()
-        .str("w")
-        .unwrap()
-        .str("333")
-        .unwrap()
-        .end()
-        .unwrap()
-        .str("aa")
-        .unwrap()
-        .begin_array()
-        .unwrap()
-        .str("aa")
-        .unwrap()
-        .str("cc")
-        .unwrap()
-        .str("bb")
-        .unwrap()
-        .end()
-        .unwrap()
-        .end()
-        .unwrap();
+        .begin_map()?
+        .str("hello")?
+        .begin_str()?
+        .str("ww")?
+        .str("w")?
+        .str("333")?
+        .end()?
+        .str("aa")?
+        .begin_array()?
+        .str("aa")?
+        .str("cc")?
+        .str("bb")?
+        .end()?
+        .end()?
+        .str("a")?;
     let end = encoder.into_inner() as *const _ as *const () as usize;
 
     let len = end - begin;
@@ -234,4 +223,5 @@ fn test_decode_cbor() {
         "aa": ["aa", "cc", "bb"]
     });
     assert_eq!(result, expected);
+    Ok(())
 }
