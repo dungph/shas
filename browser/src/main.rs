@@ -37,7 +37,6 @@ fn view(model: &Model) -> Node<Msg> {
     model.connection.view().map_msg(Msg::Connection)
 }
 
-#[wasm_bindgen(start)]
-pub fn start() {
+fn main() {
     App::start("app", init, update, view);
 }

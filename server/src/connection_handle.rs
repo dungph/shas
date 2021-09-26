@@ -1,3 +1,5 @@
+use once_cell::sync::Lazy;
+use snow::params::NoiseParams;
 use std::io;
 use utils::{decode_cbor, encode_cbor};
 //use crate::entity::MsgSender;
@@ -7,40 +9,33 @@ use futures::future::{select, Either};
 use serde_json::Value;
 use tide::{Request, Result};
 //use tide_websockets::Message::Close;
-use sha2::{self, Digest};
+//use sha2::{self, Digest};
 use tide_websockets::{Message, WebSocketConnection as Connection};
 
 use crate::peer_handle::{handle_payload, insert_sender};
 
-const NOISE_XX: &str = "Noise_XX_25519_ChaChaPoly_BLAKE2s";
+static NOISE_IX: once_cell::sync::Lazy<NoiseParams> =
+    Lazy::new(|| "Noise_IX_25519_ChaChaPoly_BLAKE2s".parse().unwrap());
 
 pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
-    let mut sha256 = sha2::Sha256::default();
-    sha256.update(&*crate::vars::SECRET);
-    let key = sha256.finalize();
-
-    let mut noise = snow::Builder::new(NOISE_XX.parse().unwrap())
-        .local_private_key(&key)
+    let mut noise = snow::Builder::new(NOISE_IX.clone())
+        .local_private_key(crate::vars::PKEY.as_ref())
         .build_responder()
         .unwrap();
 
     println!("\n handshake started");
     // handshake
-    while !noise.is_handshake_finished() {
-        if noise.is_my_turn() {
-            let mut msg = [0u8; 96];
-            let len = noise.write_message(&[], &mut msg).unwrap();
-            stream.send_bytes(msg[..len].to_vec()).await?;
+    {
+        if let Some(Ok(Message::Binary(message))) = stream.next().await {
+            let mut payload = vec![0u8; 1024];
+            noise.read_message(&message, &mut payload)?;
         } else {
-            if let Some(Ok(Message::Binary(message))) = stream.next().await {
-                let mut payload = vec![0u8; 1024];
-                noise.read_message(&message, &mut payload)?;
-            } else {
-                Err(io::Error::new(io::ErrorKind::Other, ""))?
-            }
+            Err(io::Error::new(io::ErrorKind::Other, ""))?
         }
+        let mut msg = [0u8; 96];
+        let len = noise.write_message(&[], &mut msg).unwrap();
+        stream.send_bytes(msg[..len].to_vec()).await?;
     }
-
     println!("\n handshake finished");
     let mut noise = noise.into_transport_mode()?;
 

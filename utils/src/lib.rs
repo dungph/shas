@@ -1,5 +1,5 @@
 use minicbor::{
-    decode::{self, Token, Tokenizer},
+    decode::{self, Tokenizer},
     encode::{self, write::EndOfSlice, Encode, Encoder},
 };
 use serde_json::{Map, Value};
@@ -186,9 +186,9 @@ fn test_json_cbor() -> Result<(), decode::Error> {
     assert_eq!(value, svalue);
 
     let mut t = Tokenizer::new(&buf[..written]);
-    assert_eq!(t.token()?, Token::Map(3));
-    assert_eq!(t.token()?, Token::String("b"));
-    assert_eq!(t.token()?, Token::Bytes(b"Dunn"));
+    assert_eq!(t.token()?, decode::Token::Map(3));
+    assert_eq!(t.token()?, decode::Token::String("b"));
+    assert_eq!(t.token()?, decode::Token::Bytes(b"Dunn"));
     Ok(())
 }
 

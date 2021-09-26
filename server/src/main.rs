@@ -8,9 +8,8 @@ use tide_websockets::WebSocket;
 pub fn app() -> anyhow::Result<tide::Server<()>> {
     let mut app = tide::new();
 
-    app.at("/").get(tide::Redirect::new("/assert/index.html"));
-    app.at("/assert").serve_dir("../browser/")?;
-
+    app.at("/").get(tide::Redirect::new("/index.html"));
+    app.at("/").serve_dir("../browser/dist/")?;
     app.at("/ws").get(WebSocket::new(connection_handle::run));
     Ok(app)
 }

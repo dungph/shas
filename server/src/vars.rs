@@ -1,4 +1,5 @@
 use once_cell::sync::Lazy;
+use sha2::Digest;
 use std::env::var;
 
 pub static WEB_PORT: Lazy<String> = Lazy::new(|| {
@@ -14,12 +15,12 @@ pub static DB_URL: Lazy<String> = Lazy::new(|| {
     url.expect("set DATABASE_URL to your postgres uri")
 });
 
-pub static SECRET: Lazy<String> = Lazy::new(|| {
-    let pwd = var("PRIVATE");
-    pwd.unwrap_or(String::from_utf8_lossy(&rand::random::<[u8; 32]>()).into())
-});
-
-pub static ADMIN: Lazy<String> = Lazy::new(|| {
-    let pwd = var("ADMIN_PWD");
-    pwd.unwrap_or(String::from("admin"))
+pub static PKEY: Lazy<[u8; 32]> = Lazy::new(|| {
+    var("PRIVATE")
+        .map(|s| {
+            let mut sha256 = sha2::Sha256::default();
+            sha256.update(s);
+            sha256.finalize().into()
+        })
+        .unwrap_or(rand::random::<[u8; 32]>())
 });
