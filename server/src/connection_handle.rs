@@ -4,7 +4,6 @@ use utils::{decode_cbor, encode_cbor};
 //use anyhow::anyhow;
 use async_std::{channel::unbounded, prelude::StreamExt};
 use futures::future::{select, Either};
-use minicbor::{decode::Tokenizer, Decoder, Encoder};
 use serde_json::Value;
 use tide::{Request, Result};
 //use tide_websockets::Message::Close;
@@ -64,8 +63,7 @@ pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
 
                     noise.read_message(&bytes, &mut payload)?;
 
-                    let mut decoder = Tokenizer::new(&mut payload);
-                    let payload: Value = decode_cbor(&mut decoder)
+                    let payload: Value = decode_cbor(&payload)
                         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?;
 
                     let peer = noise.get_remote_static().unwrap();
@@ -80,10 +78,7 @@ pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
             }
             Either::Right((payload, old_in_fut)) => {
                 let mut buf = [0u8; 1024];
-                let mut encoder = Encoder::new(&mut buf[..]);
-                encode_cbor(&payload?, &mut encoder).unwrap();
-                let written = encoder.into_inner() as *const [u8] as *const () as usize
-                    - &buf as *const [u8] as *const () as usize;
+                let written = encode_cbor(&payload?, &mut buf).unwrap();
 
                 let mut message = Vec::new();
                 message.resize(written + 16, 0u8);

@@ -1,10 +1,15 @@
 use minicbor::{
     decode::{self, Tokenizer},
-    encode::{self, Encode, Encoder},
+    encode::{self, write::EndOfSlice, Encode, Encoder},
 };
 use serde_json::{Map, Value};
 
-pub fn decode_cbor<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::Error> {
+pub fn decode_cbor<'b>(buf: &[u8]) -> Result<Value, decode::Error> {
+    let mut tokens = Tokenizer::new(buf);
+    decode_cbor_inner(&mut tokens)
+}
+
+fn decode_cbor_inner<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::Error> {
     Ok(match tokenizer.token()? {
         decode::Token::Bool(b) => Value::from(b),
         decode::Token::U8(n) => Value::from(n),
@@ -27,15 +32,15 @@ pub fn decode_cbor<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::E
         decode::Token::Array(n) => {
             let mut result = Vec::new();
             for _ in 0..n {
-                result.push(decode_cbor(tokenizer)?);
+                result.push(decode_cbor_inner(tokenizer)?);
             }
             Value::from(result)
         }
         decode::Token::Map(m) => {
             let mut result = Map::new();
             for _ in 0..m {
-                if let Some(s) = decode_cbor(tokenizer)?.as_str() {
-                    result.insert(s.to_owned(), decode_cbor(tokenizer)?);
+                if let Some(s) = decode_cbor_inner(tokenizer)?.as_str() {
+                    result.insert(s.to_owned(), decode_cbor_inner(tokenizer)?);
                 }
             }
             Value::from(result)
@@ -82,7 +87,7 @@ pub fn decode_cbor<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::E
                     tokenizer.token()?;
                     break;
                 } else {
-                    buf.push(decode_cbor(tokenizer)?)
+                    buf.push(decode_cbor_inner(tokenizer)?)
                 }
             }
             Value::Array(buf)
@@ -96,8 +101,8 @@ pub fn decode_cbor<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::E
                     tokenizer.token()?;
                     break;
                 } else {
-                    if let Some(s) = decode_cbor(tokenizer)?.as_str() {
-                        buf.insert(s.to_owned(), decode_cbor(tokenizer)?);
+                    if let Some(s) = decode_cbor_inner(tokenizer)?.as_str() {
+                        buf.insert(s.to_owned(), decode_cbor_inner(tokenizer)?);
                     }
                 }
             }
@@ -105,8 +110,14 @@ pub fn decode_cbor<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::E
         }
     })
 }
-
-pub fn encode_cbor<W: encode::Write>(
+pub fn encode_cbor(value: &Value, buf: &mut [u8]) -> Result<usize, encode::Error<EndOfSlice>> {
+    let begin = buf as *const [u8] as *const () as usize;
+    let mut e = Encoder::new(buf);
+    encode_cbor_inner(value, &mut e)?;
+    let end = e.into_inner() as *const [u8] as *const () as usize;
+    Ok(end - begin)
+}
+fn encode_cbor_inner<W: encode::Write>(
     value: &Value,
     e: &mut Encoder<W>,
 ) -> Result<(), encode::Error<W::Error>> {
@@ -139,14 +150,14 @@ pub fn encode_cbor<W: encode::Write>(
         Value::Array(a) => {
             e.array(a.len() as u64)?;
             for element in a {
-                encode_cbor(element, e)?;
+                encode_cbor_inner(element, e)?;
             }
         }
         Value::Object(o) => {
             e.map(o.len() as u64)?;
             for (k, v) in o {
                 k.encode(e)?;
-                encode_cbor(v, e)?;
+                encode_cbor_inner(v, e)?;
             }
         }
     };
@@ -171,13 +182,11 @@ fn test_json_cbor() {
     let mut buf = [0u8; 100];
 
     let mut encoder = Encoder::new(&mut buf[..]);
-    encode_cbor(&value, &mut encoder).unwrap();
+    encode_cbor_inner(&value, &mut encoder).unwrap();
     let written = encoder.into_inner().as_ref() as *const [u8] as *const () as usize
         - &buf as *const [u8] as *const () as usize;
 
-    let mut decoder = Tokenizer::new(&buf[..written]);
-
-    let svalue: Value = decode_cbor(&mut decoder).unwrap();
+    let svalue: Value = decode_cbor(&buf[..written]).unwrap();
     assert_eq!(value, svalue);
 }
 
@@ -219,8 +228,7 @@ fn test_decode_cbor() {
     let end = encoder.into_inner() as *const _ as *const () as usize;
 
     let len = end - begin;
-    let mut decoder = Tokenizer::new(&buf[..len]);
-    let result = decode_cbor(&mut decoder).unwrap();
+    let result = decode_cbor(&buf[..len]).unwrap();
     let expected = serde_json::json!({
         "hello": "www333",
         "aa": ["aa", "cc", "bb"]
