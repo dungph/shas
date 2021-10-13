@@ -1,35 +1,33 @@
 use std::collections::VecDeque;
 
+use noise_ix::{Initiator2, Transport};
 use seed::{prelude::*, *};
 use serde_json::Value;
-use snow::{HandshakeState, TransportState};
 use utils::{decode_cbor, encode_cbor};
 
-const NOISE_XX: &str = "Noise_XX_25519_ChaChaPoly_BLAKE2s";
-
 pub struct Model {
-    private_key: Vec<u8>,
-    remote_passwd: String,
-    handshake: Option<HandshakeState>,
-    transport: Option<TransportState>,
+    private_key: [u8; 32],
+    text: String,
+    handshake: Option<Initiator2>,
+    transport: Option<Transport>,
     ws: WebSocket,
     payload: VecDeque<Value>,
 }
 
 #[derive(Clone)]
 pub enum Msg {
-    Passwd(String),
-    Login,
+    Text(String),
+    Send,
     Recv(Vec<u8>),
     Disconnected,
     Connected,
 }
 
 impl Model {
-    pub fn init(key: &[u8], orders: &mut impl Orders<Msg>) -> Self {
+    pub fn init(key: [u8; 32], orders: &mut impl Orders<Msg>) -> Self {
         Model {
-            private_key: key.to_vec(),
-            remote_passwd: String::new(),
+            private_key: key,
+            text: String::new(),
             handshake: None,
             transport: None,
             ws: ws_open(orders),
@@ -41,7 +39,7 @@ impl Model {
             let mut buf = [0u8; 1024];
             let written = encode_cbor(&payload, &mut buf).unwrap();
 
-            let mut message = vec![0u8; 65535];
+            let mut message = vec![0u8; written + 16];
             let len = state.write_message(&buf[..written], &mut message).unwrap();
             self.ws.send_bytes(&message[..len]).unwrap();
         };
@@ -51,58 +49,41 @@ impl Model {
     }
     pub fn update(&mut self, msg: Msg, _orders: &mut impl Orders<Msg>) {
         match msg {
-            Msg::Passwd(s) => self.remote_passwd = s,
-            Msg::Login => {
-                //let payload = Payload::Login {
-                //    admin_pwd: self.remote_passwd.clone(),
-                //};
-
-                //let payload = serde_cbor::to_vec(&payload).unwrap();
-                //if let Some(ref mut state) = self.transport {
-                //    let mut message = vec![0u8; 65535];
-                //    let len = state.write_message(&payload, &mut message).unwrap();
-                //    self.ws.send_bytes(&message[..len]).unwrap();
-                //}
+            Msg::Text(s) => self.text = s,
+            Msg::Send => {
+                let json = serde_json::json!({
+                    "text": self.text
+                });
+                self.send(json);
             }
             Msg::Recv(message) => {
-                log!("recv", message);
-
-                if let Some(mut state) = self.handshake.take() {
+                if let Some(state) = self.handshake.take() {
                     let mut payload = vec![0u8; 512];
-                    state.read_message(&message[..], &mut payload).unwrap();
+                    let (_, trans) = state.read_message(&message[..], &mut payload).unwrap();
 
-                    let message = &mut payload;
-                    let len = state.write_message(&[], message).unwrap();
-                    self.ws.send_bytes(&message[..len]).unwrap();
-
-                    self.transport = Some(state.into_transport_mode().unwrap());
-                    log!("transport mode");
+                    self.transport = Some(trans);
                 } else {
-                    let mut payload = vec![0u8; 65535];
+                    let mut payload = vec![0u8; message.len() - 16];
                     if let Some(ref mut state) = self.transport {
                         let len = state.read_message(&message, &mut payload).unwrap();
-                        let payload = decode_cbor(&message[..len]).unwrap();
-                        log!(payload);
+                        let payload = decode_cbor(&payload[..len]).unwrap();
                         self.payload.push_back(payload)
                     }
                 }
             }
             Msg::Disconnected => {
                 log!("disconnected");
-
                 self.transport = None;
             }
             Msg::Connected => {
                 log!("connected");
-                let mut state = snow::Builder::new(NOISE_XX.parse().unwrap())
-                    .local_private_key(&self.private_key)
-                    .build_initiator()
-                    .unwrap();
+                let e = rand::random::<[u8; 32]>();
+                let init1 = noise_ix::initiator(e, self.private_key, &[]);
 
-                let mut message = vec![0u8; 48];
-                let len = state.write_message(&[], &mut message).unwrap();
+                let mut message = vec![0u8; 64];
+                let (len, init2) = init1.write_message(&[], &mut message).unwrap();
                 self.ws.send_bytes(&message[..len]).unwrap();
-                self.handshake = Some(state);
+                self.handshake = Some(init2);
             }
         }
     }
@@ -118,13 +99,13 @@ impl Model {
                     input![
                         C!["input"],
                         attrs! {
-                            At::Placeholder => "Password",
-                            At::Value => self.remote_passwd,
-                            At::Type => "password",
+                            At::Placeholder => "Text",
+                            At::Value => self.text,
+                            At::Type => "text",
                         },
-                        input_ev(Ev::Input, |s| Msg::Passwd(s)),
+                        input_ev(Ev::Input, Msg::Text),
                         keyboard_ev(Ev::KeyDown, |keyboard_event| {
-                            IF!(keyboard_event.key_code() == 13 => Msg::Login)
+                            IF!(keyboard_event.key_code() == 13 => Msg::Send)
                         }),
                     ]
                 ],
@@ -133,7 +114,7 @@ impl Model {
                     button![
                         C!["button is-primary"],
                         "Connect",
-                        input_ev(Ev::Click, |_| Msg::Login),
+                        input_ev(Ev::Click, |_| Msg::Send),
                     ]
                 ]
             ],
@@ -152,7 +133,7 @@ pub fn ws_open(orders: &mut impl Orders<Msg>) -> WebSocket {
                 msg_send1(Some(Msg::Recv(m.bytes().await.unwrap())));
             });
         })
-        .on_close(move |e| {
+        .on_close(move |_| {
             msg_send2(Some(Msg::Disconnected));
         })
         .on_open(move || {
@@ -170,6 +151,6 @@ pub fn hostname() -> String {
     if port.is_ok() {
         format!("{}:{}", host.unwrap(), port.unwrap())
     } else {
-        format!("{}", host.unwrap())
+        host.unwrap()
     }
 }

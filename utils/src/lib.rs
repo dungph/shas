@@ -4,12 +4,12 @@ use minicbor::{
 };
 use serde_json::{Map, Value};
 
-pub fn decode_cbor<'b>(buf: &[u8]) -> Result<Value, decode::Error> {
+pub fn decode_cbor(buf: &[u8]) -> Result<Value, decode::Error> {
     let mut tokens = Tokenizer::new(buf);
     decode_cbor_inner(&mut tokens)
 }
 
-fn decode_cbor_inner<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode::Error> {
+fn decode_cbor_inner(tokenizer: &mut Tokenizer) -> Result<Value, decode::Error> {
     Ok(match tokenizer.token()? {
         decode::Token::Bool(b) => Value::from(b),
         decode::Token::U8(n) => Value::from(n),
@@ -45,9 +45,11 @@ fn decode_cbor_inner<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode:
             }
             Value::from(result)
         }
-        decode::Token::Tag(_t) => Err(decode::Error::Message("Tag not yet supported"))?,
-        decode::Token::Simple(_s) => Err(decode::Error::Message("Simple not yet supported"))?,
-        decode::Token::Break => Err(decode::Error::Message("unexpected break"))?,
+        decode::Token::Tag(_t) => return Err(decode::Error::Message("Tag not yet supported")),
+        decode::Token::Simple(_s) => {
+            return Err(decode::Error::Message("Simple not yet supported"))
+        }
+        decode::Token::Break => return Err(decode::Error::Message("unexpected break")),
         decode::Token::Null => Value::Null,
         decode::Token::Undefined => Value::Null,
         decode::Token::BeginBytes => {
@@ -100,10 +102,8 @@ fn decode_cbor_inner<'b>(tokenizer: &mut Tokenizer<'b>) -> Result<Value, decode:
                 if token == decode::Token::Break {
                     tokenizer.token()?;
                     break;
-                } else {
-                    if let Some(s) = decode_cbor_inner(tokenizer)?.as_str() {
-                        buf.insert(s.to_owned(), decode_cbor_inner(tokenizer)?);
-                    }
+                } else if let Some(s) = decode_cbor_inner(tokenizer)?.as_str() {
+                    buf.insert(s.to_owned(), decode_cbor_inner(tokenizer)?);
                 }
             }
             Value::Object(buf)

@@ -1,89 +1,80 @@
+use async_std::{prelude::StreamExt, sync::Mutex};
 use once_cell::sync::Lazy;
-use snow::params::NoiseParams;
-use std::io;
-use utils::{decode_cbor, encode_cbor};
-//use crate::entity::MsgSender;
-//use anyhow::anyhow;
-use async_std::{channel::unbounded, prelude::StreamExt};
-use futures::future::{select, Either};
 use serde_json::Value;
+use std::{collections::HashMap, io, sync::Arc};
 use tide::{Request, Result};
-//use tide_websockets::Message::Close;
-//use sha2::{self, Digest};
 use tide_websockets::{Message, WebSocketConnection as Connection};
+use utils::{decode_cbor, encode_cbor};
 
-use crate::peer_handle::{handle_payload, insert_sender};
+type Pool = HashMap<Vec<u8>, Arc<Mutex<dyn ObjSender>>>;
+static POOL: Lazy<Mutex<Pool>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-static NOISE_IX: once_cell::sync::Lazy<NoiseParams> =
-    Lazy::new(|| "Noise_IX_25519_ChaChaPoly_BLAKE2s".parse().unwrap());
+async fn insert_sender(key: &[u8], sender: impl ObjSender + 'static) -> Arc<Mutex<dyn ObjSender>> {
+    let sender = Arc::new(Mutex::new(sender));
+    let p = POOL.lock();
+    p.await.insert(key.to_vec(), sender.clone());
+    sender
+}
 
-pub async fn run(_req: Request<()>, mut stream: Connection) -> Result<()> {
-    let mut noise = snow::Builder::new(NOISE_IX.clone())
-        .local_private_key(crate::vars::PKEY.as_ref())
-        .build_responder()
-        .unwrap();
+pub async fn run(_req: Request<()>, stream: Connection) -> Result<()> {
+    let mut read_stream = stream.clone().filter_map(|message| match message {
+        Ok(Message::Binary(b)) => Some(b),
+        _ => None,
+    });
 
-    println!("\n handshake started");
-    // handshake
-    {
-        if let Some(Ok(Message::Binary(message))) = stream.next().await {
-            let mut payload = vec![0u8; 1024];
-            noise.read_message(&message, &mut payload)?;
-        } else {
-            Err(io::Error::new(io::ErrorKind::Other, ""))?
-        }
-        let mut msg = [0u8; 96];
-        let len = noise.write_message(&[], &mut msg).unwrap();
-        stream.send_bytes(msg[..len].to_vec()).await?;
+    let b = read_stream
+        .next()
+        .await
+        .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, ""))?;
+
+    let mut payload = vec![0u8; 1024];
+    let e = rand::random::<[u8; 32]>();
+    let (_, responder) = noise_ix::responder(e, *crate::vars::PKEY, &[])
+        .read_message(&b, &mut payload)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, ""))?;
+
+    let remote_key = responder.remote_key();
+
+    let mut msg = [0u8; 96];
+    let (len, transport) = responder
+        .write_message(&[], &mut msg)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?;
+    stream.send_bytes(msg[..len].to_vec()).await?;
+
+    let (mut noise_read, noise_write) = transport.split();
+    let sender = insert_sender(&remote_key, (stream.clone(), noise_write)).await;
+
+    while let Some(bytes) = read_stream.next().await {
+        let mut payload = vec![0u8; bytes.len() - 16];
+
+        noise_read
+            .read_message(&bytes, &mut payload)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, ""))?;
+
+        let payload: Value =
+            decode_cbor(&payload).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?;
+        //echo back
+        sender.lock().await.send(payload).await?;
     }
-    println!("\n handshake finished");
-    let mut noise = noise.into_transport_mode()?;
+    Ok(())
+}
 
-    let remote_key = noise.get_remote_static().unwrap();
+#[async_trait::async_trait]
+pub(crate) trait ObjSender: Send + Sync {
+    async fn send(&mut self, obj: Value) -> Result<()>;
+}
 
-    let (sender, receiver) = unbounded();
+#[async_trait::async_trait]
+impl ObjSender for (Connection, noise_ix::NoiseWrite) {
+    async fn send(&mut self, obj: Value) -> Result<()> {
+        let mut buf = [0u8; 1024];
+        let written = encode_cbor(&obj, &mut buf).unwrap();
 
-    insert_sender(&remote_key, sender).await;
+        let mut message = Vec::new();
+        message.resize(written + 16, 0u8);
+        self.1.write_message(&buf[..written], &mut message).unwrap();
 
-    let send_stream = stream.clone();
-    let mut out_fut = receiver.recv();
-    let mut in_fut = stream.next();
-
-    loop {
-        match select(in_fut, out_fut).await {
-            Either::Left((msg, old_out_fut)) => {
-                if let Some(Ok(Message::Binary(bytes))) = msg {
-                    let mut payload = Vec::new();
-                    payload.resize(bytes.len() - 16, 0u8);
-
-                    noise.read_message(&bytes, &mut payload)?;
-
-                    let payload: Value = decode_cbor(&payload)
-                        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?;
-
-                    let peer = noise.get_remote_static().unwrap();
-
-                    handle_payload(peer, payload).await?;
-                } else {
-                    Err(io::Error::new(io::ErrorKind::Other, ""))?
-                }
-
-                in_fut = stream.next();
-                out_fut = old_out_fut;
-            }
-            Either::Right((payload, old_in_fut)) => {
-                let mut buf = [0u8; 1024];
-                let written = encode_cbor(&payload?, &mut buf).unwrap();
-
-                let mut message = Vec::new();
-                message.resize(written + 16, 0u8);
-                noise.write_message(&buf[..written], &mut message)?;
-
-                send_stream.send_bytes(message).await?;
-
-                in_fut = old_in_fut;
-                out_fut = receiver.recv();
-            }
-        }
+        self.0.send_bytes(message).await?;
+        Ok(())
     }
 }

@@ -7,8 +7,14 @@ use seed::{prelude::*, *};
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
+    let static_key: [u8; 32] = if let Ok(x) = LocalStorage::get("static_dh") {
+        x
+    } else {
+        LocalStorage::insert("static_dh", &rand::random::<[u8; 32]>()).unwrap();
+        LocalStorage::get("static_dh").unwrap()
+    };
     Model {
-        connection: connection::Model::init(&[], &mut orders.proxy(Msg::Connection)),
+        connection: connection::Model::init(static_key, &mut orders.proxy(Msg::Connection)),
     }
 }
 

@@ -24,10 +24,7 @@ rust-argon2 = "0.8.3"
 rand = "0.7"
 base64 = "0.13.0"
 chrono = "0.4.19"
-snow = "0.8.0"
 futures = "0.3.15"
-x25519-dalek = "1.1.1"
 minicbor = { version = "0.11.3", features = ["half", "alloc"] }
 utils = { path = "../utils" }
-include_dir = "0.6.2"
-
+noise-ix = { path = "../noise-ix" }
