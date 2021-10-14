@@ -29,25 +29,20 @@ jobs:
 
     steps:
     - uses: actions/checkout@master
-    - name: Install wasm32-unknown-unknown
-      uses: actions-rs/toolchain@v1
+    - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
         target: wasm32-unknown-unknown
-    - name: Cache
-      uses: actions/cache@v2.1.4
+    - uses: actions/cache@v2.1.4
       with:
         path: |
             ~/.cargo/registry
             Cargo.lock
             target
         key: ${{ runner.os }}-cargo-browser-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Install trunk
-      uses: actions-rs/install@v0.1
-        with:
-          crate: trunk
-          version: latest
+    - uses: actions-rs/install@v0.1
+      with:
+        crate: trunk
     - name: Build
       run: trunk build
 
