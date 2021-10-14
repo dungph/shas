@@ -29,20 +29,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@master
+
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
         target: wasm32-unknown-unknown
+    - uses: Swatinem/rust-cache@v1
+      with:
+        cache-on-failure: true
     - uses: actions-rs/install@v0.1
       with:
         crate: trunk
-    - uses: actions/cache@v2.1.4
-      with:
-        path: |
-            ~/.cargo/registry
-            Cargo.lock
-            target
-        key: ${{ runner.os }}-cargo-browser-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
       run: trunk build
 

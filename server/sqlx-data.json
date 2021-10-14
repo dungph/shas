@@ -1,3 +1,48 @@
 {
-  "db": "PostgreSQL"
+  "db": "PostgreSQL",
+  "086b38baf729231756cacd752462e1edce080e3df40866d8f2d82266a3b8645d": {
+    "query": "\n        -- GET ENTITY'S DATA \n        select entity_data from entity \n        where public_key = $1\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "entity_data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "981fb18ae6d41682dd7efedef4b187f7b361a7e216b4bbf0b3cd72672df47b15": {
+    "query": "\n            -- UPSERT VALUE\n            insert into entity(public_key, entity_data)\n            values($1, $2)\n            on conflict(public_key) do update\n            set entity_data = entity.entity_data || $2\n            ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Bytea",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "d9a10f4fc8ba926c201333bebf6d960f196f6740da26e9ef4c22d4b655a77f58": {
+    "query": "\n        insert into entity (public_key)\n        values ($1)\n        on conflict (public_key) do nothing\n        ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      },
+      "nullable": []
+    }
+  }
 }
