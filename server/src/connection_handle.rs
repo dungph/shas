@@ -6,6 +6,8 @@ use tide::{Request, Result};
 use tide_websockets::{Message, WebSocketConnection as Connection};
 use utils::{decode_cbor, encode_cbor};
 
+use crate::database;
+
 type Pool = HashMap<Vec<u8>, Arc<Mutex<dyn ObjSender>>>;
 static POOL: Lazy<Mutex<Pool>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
@@ -34,6 +36,7 @@ pub async fn run(_req: Request<()>, stream: Connection) -> Result<()> {
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, ""))?;
 
     let remote_key = responder.remote_key();
+    database::entity::create_entity(&remote_key).await?;
 
     let mut msg = [0u8; 96];
     let (len, transport) = responder
@@ -53,6 +56,10 @@ pub async fn run(_req: Request<()>, stream: Connection) -> Result<()> {
 
         let payload: Value =
             decode_cbor(&payload).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, ""))?;
+
+        if let Some(map) = payload.as_object() {
+            database::entity::upsert_data(&remote_key, map.clone()).await?;
+        }
         //echo back
         sender.lock().await.send(payload).await?;
     }

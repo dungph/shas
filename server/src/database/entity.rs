@@ -2,7 +2,21 @@ use super::DB;
 use serde_json::{Map, Value};
 use sqlx::{query, Result};
 
-pub async fn _upsert_data(entity: &[u8], data: Map<String, Value>) -> Result<()> {
+pub async fn create_entity(entity: &[u8]) -> Result<()> {
+    query!(
+        r#"
+        insert into entity (public_key)
+        values ($1)
+        on conflict (public_key) do nothing
+        "#,
+        entity
+    )
+    .execute(&*DB)
+    .await?;
+    Ok(())
+}
+
+pub async fn upsert_data(entity: &[u8], data: Map<String, Value>) -> Result<()> {
     if data.is_empty() {
         Ok(())
     } else {
@@ -11,7 +25,7 @@ pub async fn _upsert_data(entity: &[u8], data: Map<String, Value>) -> Result<()>
             -- UPSERT VALUE
             insert into entity(public_key, entity_data)
             values($1, $2)
-            on conflict(public_key, entity_data) do update
+            on conflict(public_key) do update
             set entity_data = entity.entity_data || $2
             "#,
             entity,

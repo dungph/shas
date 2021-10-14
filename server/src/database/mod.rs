@@ -1,5 +1,5 @@
 //mod account;
-//mod entity;
+pub mod entity;
 
 use once_cell::sync::Lazy;
 
