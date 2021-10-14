@@ -33,6 +33,9 @@ jobs:
       with:
         toolchain: stable
         target: wasm32-unknown-unknown
+    - uses: actions-rs/install@v0.1
+      with:
+        crate: trunk
     - uses: actions/cache@v2.1.4
       with:
         path: |
@@ -40,9 +43,6 @@ jobs:
             Cargo.lock
             target
         key: ${{ runner.os }}-cargo-browser-${{ hashFiles('**/Cargo.lock') }}
-    - uses: actions-rs/install@v0.1
-      with:
-        crate: trunk
     - name: Build
       run: trunk build
 

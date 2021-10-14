@@ -46,6 +46,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+
+    - name: Install sqlx-cli
+      uses: actions-rs/install@v0.1
+      with:
+        crate: sqlx-cli
+        version: latest
+        use-tool-cache: true
+
     - name: Cache
       uses: actions/cache@v2.1.4
       with:
@@ -55,13 +63,6 @@ jobs:
             target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-
-    - name: Install sqlx-cli
-      uses: actions-rs/install@v0.1
-      with:
-        crate: sqlx-cli
-        version: latest
-        use-tool-cache: true
     - name: Migrate
       run: sqlx migrate run
 
