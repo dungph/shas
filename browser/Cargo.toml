@@ -18,9 +18,6 @@ minicbor = { version = "0.11.3", features = ["half"] }
 rand = "0.8.4"
 serde = "1.0.130"
 
-[dev-dependencies]
-wasm-bindgen-test = "0.3.21"
-
 [profile.release]
 lto = true
 opt-level = 'z'
